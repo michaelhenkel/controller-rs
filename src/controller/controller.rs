@@ -12,31 +12,41 @@ use std::collections::HashMap;
 use serde::de::DeserializeOwned;
 use serde_json;
 use std::{fmt::Debug};
-use tokio::sync::mpsc;
+use crate::controller::virtual_network;
 
-pub async fn handle_events<K, S, C>(stream: impl Stream<Item = watcher::Result<Event<K>>> + Send + 'static, ar: &ApiResource, tx: mpsc::Sender<Object<S,C>>) -> anyhow::Result<()> 
-where
-    K: Resource + Clone + Debug + Send + DeserializeOwned + serde::Serialize + 'static,
-    S: Clone + Debug + Send + DeserializeOwned + serde::Serialize + 'static,
-    C: Clone + Debug + Send + DeserializeOwned + serde::Serialize + 'static,
-{
-    let mut items = stream.applied_objects().boxed();
-    while let Some(p) = items.try_next().await? {
 
-        let o = convert::<K, S, C>(p, ar)?;
-        tx.send(o).await;
+pub struct Context{
+    pub client: Client,
+    pub ar: ApiResource,
+}
+
+impl Context{
+    pub fn get_client(&self) -> Client {
+        self.client.clone()
     }
+    pub fn get_ar(&self) -> ApiResource {
+        self.ar.clone()
+    }
+}
+
+pub async fn start(client: Client) -> anyhow::Result<()> {
+    let vn_reconciler = virtual_network::VirtualNetworkReconciler::new(client.clone());
+    let mut join_handles = Vec::new();
+    join_handles.push(tokio::spawn(async move {
+        vn_reconciler.run().await
+    }));
+    futures::future::join_all(join_handles).await;
     Ok(())
 }
 
-fn convert<K, S, C>(p: K, ar: &ApiResource) -> anyhow::Result<Object<S,C>>
+pub fn convert<K, S, C>(p: &K, ar: &ApiResource) -> anyhow::Result<Object<S,C>>
 where
     K: Resource + Clone + Debug + Send + DeserializeOwned + serde::Serialize + 'static,
     S: Clone + Debug + Send + DeserializeOwned + serde::Serialize + 'static,
     C: Clone + Debug + Send + DeserializeOwned + serde::Serialize + 'static,
 {
 
-    let json_value = serde_json::to_value(&p)?;
+    let json_value = serde_json::to_value(p)?;
 
     let mut spec_value = json_value.get("spec").unwrap().clone();
     convert_reference(&mut spec_value);
@@ -159,11 +169,10 @@ fn convert_reference(json: &mut serde_json::Value) {
     }
 }
 
-pub async fn watch_config(group: &str, version: &str, kind: &str, client: Client) -> anyhow::Result<(Api<DynamicObject>, Config, ApiResource)> {
+pub async fn watch_config(group: &str, version: &str, kind: &str, client: Client) -> anyhow::Result<(Api<DynamicObject>, ApiResource)> {
     let gvk = GroupVersionKind::gvk(&group, &version, &kind);
     let (ar, _caps) = kube::discovery::pinned_kind(&client, &gvk).await?;
 
     let api = Api::<DynamicObject>::all_with(client.clone(),&ar);
-    let wc = watcher::Config::default();
-    Ok((api, wc, ar))
+    Ok((api, ar))
 }

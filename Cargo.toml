@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 kube = { version = "0.83.0", features = ["runtime", "derive"] }
+kube-runtime = { version = "0.83.0" }
 k8s-openapi = { version = "0.18.0", features = ["v1_26"] }
 tokio = { version = "1.28.2", features = ["full"] }
 tracing = "0.1.36"
@@ -19,6 +20,7 @@ serde_yaml = "0.9.19"
 pbjson = "0.5.1"
 prost = "0.11.9"
 async-trait = "0.1.68"
+thiserror = "1.0.40"
 
 
 [build-dependencies]
