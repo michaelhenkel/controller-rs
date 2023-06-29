@@ -1,17 +1,17 @@
 
-use super::super::ssd_git::juniper::net::contrail::cn2::contrail::pkg::apis::core::v4 as v4;
-//use crate::k8s::io::apimachinery::pkg::apis::meta::v1 as meta_v1;
-use crate::k8s::io::api::core::v1 as core_v1;
+use crate::protos::ssd_git::juniper::net::contrail::cn2::contrail::pkg::apis::core::v4 as v4;
+use crate::protos::k8s::io::api::core::v1 as core_v1;
 use futures::{Stream, StreamExt, TryStreamExt};
 use kube::{
-    api::{Api, DynamicObject, GroupVersionKind, Resource, Object},
-    runtime::{watcher, watcher::Event, WatchStreamExt},
+    api::{Resource, Api, DynamicObject, GroupVersionKind, Object},
+    Client,
+    runtime::{watcher, watcher::Event, watcher::Config, WatchStreamExt},
 };
 use kube::discovery::ApiResource;
 use std::collections::HashMap;
 use serde::de::DeserializeOwned;
 use serde_json;
-use std::{env, fmt::Debug};
+use std::{fmt::Debug};
 use tokio::sync::mpsc;
 
 pub async fn handle_events<K, S, C>(stream: impl Stream<Item = watcher::Result<Event<K>>> + Send + 'static, ar: &ApiResource, tx: mpsc::Sender<Object<S,C>>) -> anyhow::Result<()> 
@@ -157,4 +157,13 @@ fn convert_reference(json: &mut serde_json::Value) {
         },
         _ => {}
     }
+}
+
+pub async fn watch_config(group: &str, version: &str, kind: &str, client: Client) -> anyhow::Result<(Api<DynamicObject>, Config, ApiResource)> {
+    let gvk = GroupVersionKind::gvk(&group, &version, &kind);
+    let (ar, _caps) = kube::discovery::pinned_kind(&client, &gvk).await?;
+
+    let api = Api::<DynamicObject>::all_with(client.clone(),&ar);
+    let wc = watcher::Config::default();
+    Ok((api, wc, ar))
 }

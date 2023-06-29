@@ -135,6 +135,7 @@ name = "controller-rs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "futures",
  "k8s-openapi",
  "kube",
