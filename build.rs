@@ -43,7 +43,8 @@ fn build_config(){
         .out_dir(&out_dir)
         //.include_file("mod.rs")
         .compile_well_known_types()
-        .extern_path(".google.protobuf", "::pbjson_types")    
+        .extern_path(".google.protobuf", "::pbjson_types")   
+        //.field_attribute(".", "#[serde(rename_all = \"camelCase\")]")
         .file_descriptor_set_path(&descriptor_path)
         .compile_protos(&protos, &incl)
         .unwrap_or_else(|e| panic!("protobuf compile error: {}", e));

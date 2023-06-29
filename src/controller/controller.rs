@@ -1,8 +1,7 @@
 
-
-use controller_rs::ssd_git::juniper::net::contrail::cn2::contrail::pkg::apis::core::v4 as v4;
-//use controller_rs::k8s::io::apimachinery::pkg::apis::meta::v1 as meta_v1;
-use controller_rs::k8s::io::api::core::v1 as core_v1;
+use super::super::ssd_git::juniper::net::contrail::cn2::contrail::pkg::apis::core::v4 as v4;
+//use crate::k8s::io::apimachinery::pkg::apis::meta::v1 as meta_v1;
+use crate::k8s::io::api::core::v1 as core_v1;
 use futures::{Stream, StreamExt, TryStreamExt};
 use kube::{
     api::{Api, DynamicObject, GroupVersionKind, Resource, Object},
@@ -13,41 +12,7 @@ use std::collections::HashMap;
 use serde::de::DeserializeOwned;
 use serde_json;
 use std::{env, fmt::Debug};
-use controller_rs::reconciler;
 use tokio::sync::mpsc;
-
-mod controller;
-
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt::init();
-    let client = kube::Client::try_default().await?;
-
-    let group = env::var("GROUP").unwrap_or_else(|_| "".into());
-    let version = env::var("VERSION").unwrap_or_else(|_| "v1".into());
-    let kind = env::var("KIND").unwrap_or_else(|_| "Pod".into());
-    
-    let gvk = GroupVersionKind::gvk(&group, &version, &kind);
-    let (ar, _caps) = kube::discovery::pinned_kind(&client, &gvk).await?;
-
-    let api = Api::<DynamicObject>::all_with(client.clone(),&ar);
-    let wc = watcher::Config::default();
-
-    let vn_reconciler = reconciler::virtual_network::VirtualNetworkReconciler::new();
-    let vn_tx = vn_reconciler.tx.clone();
-    let mut join_handlers = Vec::new();
-
-    join_handlers.push(tokio::spawn(async move {
-        vn_reconciler.recv().await
-    }));
-
-    join_handlers.push(tokio::spawn(async move {
-        handle_events::<DynamicObject,v4::VirtualNetworkSpec,v4::VirtualNetworkStatus>(watcher(api, wc), &ar, vn_tx).await
-    }));
-    futures::future::join_all(join_handlers).await;
-    Ok(())
-}
 
 pub async fn handle_events<K, S, C>(stream: impl Stream<Item = watcher::Result<Event<K>>> + Send + 'static, ar: &ApiResource, tx: mpsc::Sender<Object<S,C>>) -> anyhow::Result<()> 
 where
@@ -60,7 +25,6 @@ where
 
         let o = convert::<K, S, C>(p, ar)?;
         tx.send(o).await;
-        //println!("virtual_network_spec: {:#?}", o.spec);
     }
     Ok(())
 }
