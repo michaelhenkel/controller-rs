@@ -43,7 +43,7 @@ fn build_config(){
         .out_dir(&out_dir)
         //.include_file("mod.rs")
         .compile_well_known_types()
-        .extern_path(".google.protobuf", "::pbjson_types")   
+        .extern_path(".google.protobuf", "::pbjson_types")
         //.field_attribute(".", "#[serde(rename_all = \"camelCase\")]")
         .file_descriptor_set_path(&descriptor_path)
         .compile_protos(&protos, &incl)
@@ -84,7 +84,7 @@ fn build_config(){
     pbjson_build::Builder::new()
         .register_descriptors(&descriptor_set).unwrap()
         .out_dir(&out_dir)
-        .ignore_unknown_fields()
+        .preserve_proto_field_names()
         .build(&[".ssd_git.juniper.net.contrail.cn2.contrail.pkg.apis.core.v4"]).unwrap();
 }
 
@@ -94,7 +94,6 @@ fn search_files_with_extension(search_paths: Vec<&str>, protos: &mut Vec<String>
             for entry in entries {
                 if let Ok(entry) = entry {
                     let path = entry.path();
-    
                     if path.is_dir() {
                         search_files_with_extension(vec![path.to_str().unwrap()], protos, includes);
                     } else if path.is_file() {

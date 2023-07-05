@@ -9,6 +9,7 @@ edition = "2021"
 kube = { version = "0.83.0", features = ["runtime", "derive"] }
 kube-runtime = { version = "0.83.0" }
 k8s-openapi = { version = "0.18.0", features = ["v1_26"] }
+#cn2-openapi = { path = "../cn2-openapi", features = ["v1_27"] }
 tokio = { version = "1.28.2", features = ["full"] }
 tracing = "0.1.36"
 tracing-subscriber = "0.3.3"
