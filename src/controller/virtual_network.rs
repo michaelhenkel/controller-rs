@@ -11,7 +11,6 @@ use crate::controller::controller::{
     get_spec_status, 
     Reconciler
 };
-use crate::reconcile;
 use tokio::time::Duration;
 use async_trait::async_trait;
 
@@ -49,14 +48,13 @@ impl Reconciler for VirtualNetworkReconciler{
     }
  
     async fn reconcile(g: Arc<DynamicObject>, _ctx: Arc<Context>) -> Result<Action, ReconcileError> {
-        reconcile!(v4::VirtualNetwork);
         let (spec, status) = get_spec_status(g.as_ref()).map_err(|e| ReconcileError(e))?;
-        let ri = v4::VirtualNetwork{
+        let vn = v4::VirtualNetwork{
             metadata: Some(g.metadata.clone()),
             spec: Some(spec),
             status: Some(status),
         };
-        println!("reconcile {:#?}", ri);
+        println!("reconcile {:#?}", vn);
         Ok(Action::requeue(Duration::from_secs(300)))
     }
     
