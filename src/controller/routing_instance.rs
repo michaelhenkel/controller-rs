@@ -9,10 +9,11 @@ use crate::controller::controller::{
     ReconcileError,
     Context,
     get_spec_status, 
-    Reconciler
+    //Reconciler
 };
 use tokio::time::Duration;
 use async_trait::async_trait;
+
 
 pub struct RoutingInstanceReconciler{
     client: Client,
@@ -21,19 +22,18 @@ pub struct RoutingInstanceReconciler{
     kind: &'static str,
 }
 
-impl RoutingInstanceReconciler {
-    pub fn new(client: Client, group: &'static str, version: &'static str, kind: &'static str) -> Self {
-        RoutingInstanceReconciler{
+/*
+#[async_trait]
+impl Reconciler<v4::RoutingInstanceSpec,v4::RoutingInstanceStatus> for RoutingInstanceReconciler{
+    fn new(client: Client, group: &'static str, version: &'static str, kind: &'static str) -> Self {
+        Self{
             client,
             group,
             version,
             kind,
         }
     }
-}
-
-#[async_trait]
-impl Reconciler for RoutingInstanceReconciler{
+    
     fn group(&self) -> &'static str {
         self.group
     }
@@ -46,19 +46,6 @@ impl Reconciler for RoutingInstanceReconciler{
     fn client(&self) -> Client {
         self.client.clone()
     }
-    async fn reconcile(g: Arc<DynamicObject>, _ctx: Arc<Context>) -> Result<Action, ReconcileError> {
-        let (spec, status) = get_spec_status(g.as_ref()).map_err(|e| ReconcileError(e))?;
-        let ri = v4::RoutingInstance{
-            metadata: Some(g.metadata.clone()),
-            spec: Some(spec),
-            status: Some(status),
-        };
-        println!("reconcile {:#?}", ri);
-        Ok(Action::requeue(Duration::from_secs(300)))
-    }
-    
-    fn error_policy(_obj: Arc<DynamicObject>, _error: &ReconcileError, _ctx: Arc<Context>) -> Action {
-        Action::requeue(Duration::from_secs(60))
-    }
 }
+*/
 

@@ -1,5 +1,5 @@
 use kube::{
-    api::{Api, DynamicObject, GroupVersionKind},
+    api::{Api, DynamicObject, GroupVersionKind, Object},
     Client,
     runtime::{watcher,{controller::{Controller, Action}}},
 };
@@ -13,6 +13,9 @@ use async_trait::async_trait;
 use std::error::Error;
 use crate::controller::virtual_network;
 use super::routing_instance;
+use futures::Future;
+use crate::ssd_git::contrail::cn2::contrail::pkg::apis::core::v4 as v4;
+
 
 const GROUP: &str = "core.contrail.juniper.net";
 const VERSION: &str = "v4";
@@ -32,10 +35,13 @@ pub struct Context{
     pub client: Client,
     pub ar: ApiResource,
     pub api: Api<DynamicObject>,
+    pub kind: String,
+    pub version: String,
+    pub group: String,
 }
 
 impl Context{
-    pub async fn new(group: &str, version: &str, kind: &str, client: Client) -> anyhow::Result<Arc<Context>> {
+    pub async fn new(group: String, version: String, kind: String, client: Client) -> anyhow::Result<Arc<Context>> {
         let gvk = GroupVersionKind::gvk(&group, &version, &kind);
         let (ar, _caps) = kube::discovery::pinned_kind(&client, &gvk).await?;
     
@@ -44,6 +50,9 @@ impl Context{
             client,
             ar,
             api,
+            kind,
+            version,
+            group,
         }))
     }
 }
@@ -52,23 +61,14 @@ pub async fn start(client: Client) -> anyhow::Result<()> {
     let mut join_handles = Vec::new();
     let cloned_client = client.clone();
     join_handles.push(tokio::spawn(async move{
-        virtual_network::VirtualNetworkReconciler::new(
+        let reconciler = Reconciler2::new(
             cloned_client,
-            GROUP,
-            VERSION,
-            "VirtualNetwork"
-        ).run().await
+            GROUP.to_string(),
+            VERSION.to_string(),
+            "VirtualNetwork".to_string()).await?;
+        reconciler.run(virtual_network::VirtualNetworkReconciler::reconcile).await
     }));
     let cloned_client = client.clone();
-    join_handles.push(tokio::spawn(async move {
-        routing_instance::RoutingInstanceReconciler::new(
-            cloned_client,
-            GROUP,
-            VERSION,
-            "RoutingInstance"
-        ).run().await
-    }));
-
 
     futures::future::join_all(join_handles).await;
     Ok(())
@@ -87,8 +87,45 @@ where
     Ok((spec, status))
 }
 
+pub struct Reconciler2{
+    pub context: Arc<Context>,
+}
+
+impl Reconciler2{
+    pub async fn new(client: Client, group: String, version: String, kind: String) -> anyhow::Result<Self> 
+    {
+        let context = Context::new(group, version, kind, client).await?;
+        Ok(Self{
+            context,
+        })
+    }
+    async fn run<F,Fut>(&self, reconcile: F) -> anyhow::Result<()>
+    where
+        F: Fn(Arc<DynamicObject>, Arc<Context>) -> Fut + Send + 'static,
+        Fut: Future<Output = Result<Action, ReconcileError>> + Send + 'static,
+    {
+        Controller::new_with(self.context.as_ref().api.clone(), watcher::Config::default(), self.context.as_ref().ar.clone())
+            .run(reconcile, Self::error_policy, self.context.clone())
+            .for_each(|res| async move {
+                match res {
+                    Ok(o) => println!("reconciled {}/{}", o.0.namespace.as_deref().unwrap_or_default(), o.0.name),
+                    Err(e) => println!("reconcile failed: {:?}",e),
+                }
+            }).await;
+        Ok(())
+    }
+    fn error_policy(_obj: Arc<DynamicObject>, _error: &ReconcileError, _ctx: Arc<Context>) -> Action {
+        Action::requeue(tokio::time::Duration::from_secs(60))
+    }
+}
+/*
 #[async_trait]
-pub trait Reconciler{
+pub trait Reconciler<S, C>
+where
+    S: Clone + Debug + Send + DeserializeOwned + serde::Serialize + 'static,
+    C: Clone + Debug + Send + DeserializeOwned + serde::Serialize + 'static,
+{
+    fn new(client: Client, group: &'static str, version: &'static str, kind: &'static str) -> Self;
     async fn run(&self) -> anyhow::Result<()> {
         let context = Context::new(self.group(), self.version(), self.kind(), self.client().clone()).await?;
         Controller::new_with(context.as_ref().api.clone(), watcher::Config::default(), context.as_ref().ar.clone())
@@ -101,29 +138,26 @@ pub trait Reconciler{
             }).await;
         Ok(())
     }
+     
     fn group(&self) -> &'static str;
     fn version(&self) -> &'static str;
     fn kind(&self) -> &'static str;
     fn client(&self) -> Client;
-    async fn reconcile(g: Arc<DynamicObject>, _ctx: Arc<Context>) -> Result<Action, ReconcileError>;
-    fn error_policy(obj: Arc<DynamicObject>, _error: &ReconcileError, _ctx: Arc<Context>) -> Action;
-}
-
-/* 
-#[macro_export]
-macro_rules! reconcile {
-    ($resource:ident) => {{
-
-            let (spec, status) = get_spec_status(g.as_ref()).map_err(|e| ReconcileError(e))?;
-            let ri = $resource{
-                metadata: Some(g.metadata.clone()),
-                spec: Some(spec),
-                status: Some(status),
-            };
-            println!("reconcile {:#?}", ri);
-            Ok(Action::requeue(Duration::from_secs(300)))
-        
-    }};
+    
+    async fn reconcile(g: Arc<DynamicObject>, _ctx: Arc<Context>) -> Result<Action, ReconcileError> {
+        let (spec, status) = get_spec_status::<S,C>(g.as_ref()).map_err(|e| ReconcileError(e))?;
+        let o = Object{
+            types: g.types.clone(),
+            metadata: g.metadata.clone(),
+            spec: Some(spec),
+            status: Some(status),
+        };
+        println!("reconcile {:#?}", o);
+        Ok(Action::requeue(tokio::time::Duration::from_secs(300)))
+    }
+    fn error_policy(_obj: Arc<DynamicObject>, _error: &ReconcileError, _ctx: Arc<Context>) -> Action {
+        Action::requeue(tokio::time::Duration::from_secs(60))
+    }
 }
 */
 

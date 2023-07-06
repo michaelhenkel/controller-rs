@@ -22,6 +22,7 @@ pbjson = "0.5.1"
 prost = "0.11.9"
 async-trait = "0.1.68"
 thiserror = "1.0.40"
+reconciler-derive = { version = "0.1.0", path = "reconciler-derive" }
 
 
 [build-dependencies]
